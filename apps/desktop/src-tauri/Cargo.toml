@@ -1,0 +1,33 @@
+[package]
+name = "corvusav-desktop"
+description = "Aplicativo desktop do CorvusAV (shell Tauri 2 + interface React)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[lib]
+name = "corvusav_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+corvus-core.workspace = true
+corvus-storage.workspace = true
+corvus-clamav.workspace = true
+corvus-policy.workspace = true
+corvus-scanner.workspace = true
+
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true

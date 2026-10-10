@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CorvusAV — símbolo (corvo geométrico em escudo).
+  Interpretação vetorial original e simplificada, inspirada na referência
+  de identidade visual fornecida (corvo + escudo, paleta azul/ciano).
+  Não é um traçado do material de referência nem uma imagem incorporada.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" width="200" height="220">
+  <defs>
+    <linearGradient id="shieldFill" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#14243A"/>
+      <stop offset="100%" stop-color="#0B1220"/>
+    </linearGradient>
+    <linearGradient id="headFill" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1E3A5F"/>
+      <stop offset="100%" stop-color="#0B1220"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Escudo -->
+  <path d="M100,10 L182,42 L182,118 C182,166 146,198 100,214
+           C54,198 18,166 18,118 L18,42 Z"
+        fill="url(#shieldFill)" stroke="#00E5FF" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- Cabeça de corvo geométrica (perfil, bico à direita) -->
+  <path d="M62,66 L98,56 L128,70 L168,96 L140,103 L150,112 L120,118
+           L108,150 L88,162 L58,164 L66,126 L44,116 L50,86 Z"
+        fill="url(#headFill)" stroke="#38B2F6" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- Facetas geométricas internas -->
+  <g stroke="#00E5FF" stroke-width="1.5" stroke-linecap="round" opacity="0.55" fill="none">
+    <path d="M98,56 L120,118"/>
+    <path d="M128,70 L108,150"/>
+    <path d="M62,66 L120,118"/>
+    <path d="M44,116 L108,150"/>
+  </g>
+
+  <!-- Olho -->
+  <circle cx="104" cy="88" r="5" fill="#00E5FF"/>
+
+  <!-- Bico (destaque) -->
+  <path d="M128,70 L168,96 L140,103 Z" fill="#101C2E" stroke="#00E5FF" stroke-width="2" stroke-linejoin="round"/>
+</svg>

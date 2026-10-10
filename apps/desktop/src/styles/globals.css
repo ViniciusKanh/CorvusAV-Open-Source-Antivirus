@@ -1,0 +1,43 @@
+@import '@fontsource/exo-2/500.css';
+@import '@fontsource/exo-2/700.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-white/5;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-brand-bg text-brand-text antialiased;
+  }
+
+  ::selection {
+    background-color: rgba(0, 229, 255, 0.25);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: #1e3a5f;
+    border-radius: 9999px;
+  }
+}

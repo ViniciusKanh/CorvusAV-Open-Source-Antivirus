@@ -1,0 +1,14 @@
+[package]
+name = "corvus-clamav"
+description = "Adaptador CorvusAV para o mecanismo ClamAV (clamscan), executado como processo externo isolado."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+corvus-core.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true

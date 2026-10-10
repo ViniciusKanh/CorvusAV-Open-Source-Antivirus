@@ -1,0 +1,21 @@
+[package]
+name = "corvus-storage"
+description = "Persistência SQLite do CorvusAV: migrations, histórico e estado dos mecanismos."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+corvus-core.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+time.workspace = true
+uuid.workspace = true
+# `dirs` resolve corretamente os diretórios especiais do Windows
+# (%LocalAppData%, %ProgramData%) e seus equivalentes em outros sistemas,
+# evitando reimplementar essa lógica (sujeita a casos extremos) à mão.
+dirs = "5"

@@ -1,0 +1,75 @@
+name: CI
+
+# Pipeline de integração contínua do CorvusAV.
+#
+# Executa em runner Windows porque o produto final (serviço, app desktop,
+# instalador) é nativo para Windows 10/11 — validar em outro SO daria falso
+# senso de segurança sobre caminhos, permissões e integração com o sistema.
+#
+# Nota de transparência: este workflow foi redigido durante uma sessão de
+# desenvolvimento em um ambiente Linux sem rustc/cargo e sem acesso de rede a
+# crates.io, portanto NENHUM destes passos foi executado para validação até
+# o momento em que este arquivo foi criado. A primeira execução real deste
+# pipeline (no GitHub Actions, ou localmente pelo mantenedor) é quem
+# comprovará se os comandos abaixo passam. Ver docs/development/README.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy, test)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar toolchain Rust estável
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache do Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test --workspace
+
+  frontend:
+    name: Frontend (build, test)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: npm install
+        run: npm install
+
+      - name: npm run build
+        run: npm run build
+
+      - name: npm run test
+        run: npm run test

@@ -1,0 +1,19 @@
+[package]
+name = "corvus-scanner"
+description = "Orquestração de tarefas de verificação do CorvusAV: progresso, cancelamento e agregação de resultados."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+authors.workspace = true
+
+[dependencies]
+corvus-core.workspace = true
+corvus-storage.workspace = true
+corvus-clamav.workspace = true
+corvus-policy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
