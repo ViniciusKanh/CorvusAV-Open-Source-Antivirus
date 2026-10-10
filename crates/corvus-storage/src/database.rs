@@ -7,9 +7,9 @@ use corvus_core::{
     Detection, DetectionId, EngineHealth, QuarantineItem, QuarantineItemId, ScanJob, ScanJobId,
     ScanResult, ScanResultId, ScanStatus, VerdictCounts,
 };
-use std::collections::HashMap;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use time::OffsetDateTime;
 
 use crate::codec::*;
@@ -44,7 +44,9 @@ impl Database {
         let mut conn = Connection::open(path)?;
         Self::configure(&mut conn)?;
         run_migrations(&mut conn)?;
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     /// Banco em memória, usado em testes e desenvolvimento isolado.
@@ -52,7 +54,9 @@ impl Database {
         let mut conn = Connection::open_in_memory()?;
         Self::configure(&mut conn)?;
         run_migrations(&mut conn)?;
-        Ok(Self { conn: Mutex::new(conn) })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     fn configure(conn: &mut Connection) -> StorageResult<()> {
@@ -581,12 +585,18 @@ impl Database {
             ],
         )?;
         if affected == 0 {
-            return Err(StorageError::NotFound(format!("quarantine_item {}", item.id)));
+            return Err(StorageError::NotFound(format!(
+                "quarantine_item {}",
+                item.id
+            )));
         }
         Ok(())
     }
 
-    pub fn get_quarantine_item(&self, id: QuarantineItemId) -> StorageResult<Option<QuarantineItem>> {
+    pub fn get_quarantine_item(
+        &self,
+        id: QuarantineItemId,
+    ) -> StorageResult<Option<QuarantineItem>> {
         let conn = self.conn.lock().expect("mutex do banco envenenado");
         conn.query_row(
             "SELECT id, scan_result_id, original_path, internal_name, state, reason,
@@ -651,7 +661,10 @@ fn sqlite_decode_err(err: impl std::fmt::Display) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
         0,
         rusqlite::types::Type::Text,
-        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, err.to_string())),
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            err.to_string(),
+        )),
     )
 }
 
@@ -671,7 +684,10 @@ mod tests {
         job.files_scanned = 42;
         db.update_scan_job(&job).unwrap();
 
-        let fetched = db.get_scan_job(job.id).unwrap().expect("job deveria existir");
+        let fetched = db
+            .get_scan_job(job.id)
+            .unwrap()
+            .expect("job deveria existir");
         assert_eq!(fetched.status, ScanStatus::Running);
         assert_eq!(fetched.files_scanned, 42);
     }
@@ -717,7 +733,10 @@ mod tests {
         assert_eq!(fetched.len(), 1);
         assert_eq!(fetched[0].verdict, Verdict::Malicious);
         assert_eq!(fetched[0].detections.len(), 1);
-        assert_eq!(fetched[0].detections[0].signature_id, "Eicar-Test-Signature");
+        assert_eq!(
+            fetched[0].detections[0].signature_id,
+            "Eicar-Test-Signature"
+        );
     }
 
     #[test]
@@ -772,7 +791,10 @@ mod tests {
         };
         db.insert_quarantine_item(&item).unwrap();
 
-        let fetched = db.get_quarantine_item(item.id).unwrap().expect("item deveria existir");
+        let fetched = db
+            .get_quarantine_item(item.id)
+            .unwrap()
+            .expect("item deveria existir");
         assert_eq!(fetched.state, QuarantineState::Quarantined);
         assert_eq!(fetched.original_path, item.original_path);
 
@@ -814,8 +836,14 @@ mod tests {
     #[test]
     fn audit_events_are_recorded_most_recent_first() {
         let db = Database::open_in_memory().unwrap();
-        db.insert_audit_event("settings_changed", "Tema alterado", serde_json::json!({})).unwrap();
-        db.insert_audit_event("scan_started", "Verificação rápida iniciada", serde_json::json!({})).unwrap();
+        db.insert_audit_event("settings_changed", "Tema alterado", serde_json::json!({}))
+            .unwrap();
+        db.insert_audit_event(
+            "scan_started",
+            "Verificação rápida iniciada",
+            serde_json::json!({}),
+        )
+        .unwrap();
 
         let events = db.list_recent_audit_events(10).unwrap();
         assert_eq!(events.len(), 2);

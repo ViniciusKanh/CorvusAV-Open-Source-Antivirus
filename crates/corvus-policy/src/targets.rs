@@ -14,7 +14,9 @@ pub enum FullScanAvailability {
     Available(Vec<PathBuf>),
     /// A verificação completa ainda não está implementada: a interface deve
     /// comunicar isso claramente, nunca simular uma varredura completa.
-    Unavailable { reason: String },
+    Unavailable {
+        reason: String,
+    },
 }
 
 /// Conjunto explícito e documentado de diretórios críticos para a
@@ -64,7 +66,10 @@ pub fn validate_custom_targets(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Policy
         return Err(PolicyError::EmptyTargetList);
     }
     if paths.len() > MAX_CUSTOM_TARGETS {
-        return Err(PolicyError::TooManyTargets { max: MAX_CUSTOM_TARGETS, got: paths.len() });
+        return Err(PolicyError::TooManyTargets {
+            max: MAX_CUSTOM_TARGETS,
+            got: paths.len(),
+        });
     }
 
     for path in paths {
@@ -89,7 +94,10 @@ mod tests {
     #[test]
     fn quick_scan_targets_only_includes_directories_that_exist() {
         for target in quick_scan_targets() {
-            assert!(target.is_dir(), "{target:?} deveria existir e ser um diretório");
+            assert!(
+                target.is_dir(),
+                "{target:?} deveria existir e ser um diretório"
+            );
         }
     }
 

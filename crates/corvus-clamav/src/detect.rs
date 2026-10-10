@@ -25,7 +25,11 @@ pub struct EngineVersionInfo {
 /// Retorna `None` sem lançar erro quando nada é encontrado — cabe à camada
 /// de UI comunicar essa condição ao usuário.
 pub fn locate_clamscan() -> Option<PathBuf> {
-    let exe_name = if cfg!(windows) { "clamscan.exe" } else { "clamscan" };
+    let exe_name = if cfg!(windows) {
+        "clamscan.exe"
+    } else {
+        "clamscan"
+    };
 
     if let Some(custom) = std::env::var_os(PATH_OVERRIDE_VAR) {
         let path = PathBuf::from(custom);
@@ -61,7 +65,11 @@ pub fn locate_clamscan() -> Option<PathBuf> {
 /// antes de cair para `PATH` e os locais padrão de instalação no Windows —
 /// mas nunca assumimos que ele existe sem checar o sistema de arquivos.
 pub fn locate_freshclam() -> Option<PathBuf> {
-    let exe_name = if cfg!(windows) { "freshclam.exe" } else { "freshclam" };
+    let exe_name = if cfg!(windows) {
+        "freshclam.exe"
+    } else {
+        "freshclam"
+    };
 
     if let Some(custom_clamscan) = std::env::var_os(PATH_OVERRIDE_VAR) {
         let clamscan_path = PathBuf::from(custom_clamscan);
@@ -149,7 +157,10 @@ pub fn parse_version_output(raw: &str) -> Option<EngineVersionInfo> {
         return None;
     }
 
-    Some(EngineVersionInfo { engine_version, signature_version })
+    Some(EngineVersionInfo {
+        engine_version,
+        signature_version,
+    })
 }
 
 /// Nomes-base dos arquivos de assinatura oficiais do ClamAV. Cada um pode
@@ -204,10 +215,17 @@ fn signatures_last_updated(clamscan_exe: &Path) -> Option<OffsetDateTime> {
         for base_name in SIGNATURE_DB_BASE_NAMES {
             for extension in ["cvd", "cld"] {
                 let path = dir.join(format!("{base_name}.{extension}"));
-                let Ok(metadata) = std::fs::metadata(&path) else { continue };
-                let Ok(modified) = metadata.modified() else { continue };
-                let Ok(duration) = modified.duration_since(UNIX_EPOCH) else { continue };
-                let Ok(timestamp) = OffsetDateTime::from_unix_timestamp(duration.as_secs() as i64) else {
+                let Ok(metadata) = std::fs::metadata(&path) else {
+                    continue;
+                };
+                let Ok(modified) = metadata.modified() else {
+                    continue;
+                };
+                let Ok(duration) = modified.duration_since(UNIX_EPOCH) else {
+                    continue;
+                };
+                let Ok(timestamp) = OffsetDateTime::from_unix_timestamp(duration.as_secs() as i64)
+                else {
                     continue;
                 };
                 let is_more_recent = match most_recent {
@@ -317,7 +335,8 @@ mod tests {
 
     #[test]
     fn finds_signature_date_from_database_subdirectory() {
-        let dir = std::env::temp_dir().join(format!("corvusav-test-sigs-found-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("corvusav-test-sigs-found-{}", std::process::id()));
         let db_dir = dir.join("database");
         std::fs::create_dir_all(&db_dir).expect("falha ao preparar diretório de teste");
         let exe = dir.join("clamscan.exe");
@@ -333,7 +352,8 @@ mod tests {
 
     #[test]
     fn missing_signature_files_yield_none_instead_of_a_guess() {
-        let dir = std::env::temp_dir().join(format!("corvusav-test-sigs-missing-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("corvusav-test-sigs-missing-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("falha ao preparar diretório de teste");
         let exe = dir.join("clamscan.exe");
         std::fs::write(&exe, b"").expect("falha ao escrever executável fictício de teste");

@@ -14,13 +14,18 @@ apps/desktop/src-tauri/gen/
 apps/desktop/src-tauri/WixTools/
 
 # Dados locais / runtime (nunca versionar banco local, quarentena ou logs)
+# Atencao: os padroes abaixo sao ancorados na raiz do repositorio (prefixo
+# "/") de proposito -- sem o "/", "quarantine/" tambem casaria com
+# apps/desktop/src/features/quarantine/ (codigo-fonte da UI de quarentena),
+# excluindo-o silenciosamente do Git. Isso ja aconteceu uma vez nesta
+# sessao e quebrou o build do frontend no CI.
 *.db
 *.db-journal
 *.db-wal
 *.sqlite
 *.sqlite3
-corvus-data/
-quarantine/
+/corvus-data/
+/quarantine/
 
 # Segredos e configuração local
 .env

@@ -33,10 +33,14 @@ pub enum ClamAvError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RawVerdict {
     Clean,
-    Infected { signature: String },
+    Infected {
+        signature: String,
+    },
     /// Arquivo não pôde ser examinado (permissão negada, E/S, corrompido
     /// etc.). Nunca deve ser tratado como limpo pelas camadas superiores.
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,18 +62,25 @@ pub fn parse_clamscan_line(line: &str) -> Option<RawScanEntry> {
     let status = status.trim();
 
     if status == "OK" {
-        return Some(RawScanEntry { path: path.to_string(), verdict: RawVerdict::Clean });
+        return Some(RawScanEntry {
+            path: path.to_string(),
+            verdict: RawVerdict::Clean,
+        });
     }
     if let Some(signature) = status.strip_suffix(" FOUND") {
         return Some(RawScanEntry {
             path: path.to_string(),
-            verdict: RawVerdict::Infected { signature: signature.trim().to_string() },
+            verdict: RawVerdict::Infected {
+                signature: signature.trim().to_string(),
+            },
         });
     }
     if let Some(message) = status.strip_suffix(" ERROR") {
         return Some(RawScanEntry {
             path: path.to_string(),
-            verdict: RawVerdict::Error { message: message.trim().to_string() },
+            verdict: RawVerdict::Error {
+                message: message.trim().to_string(),
+            },
         });
     }
 
@@ -189,10 +200,15 @@ impl ClamAvAdapter {
             return Ok(skipped_entries);
         }
 
-        let file_list_path = std::env::temp_dir()
-            .join(format!("corvusav-clamscan-filelist-{}.txt", uuid::Uuid::new_v4()));
-        let file_list_content: String =
-            files.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\n");
+        let file_list_path = std::env::temp_dir().join(format!(
+            "corvusav-clamscan-filelist-{}.txt",
+            uuid::Uuid::new_v4()
+        ));
+        let file_list_content: String = files
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         if let Err(e) = tokio::fs::write(&file_list_path, file_list_content).await {
             return Err(ClamAvError::Io(e));
         }
@@ -300,11 +316,12 @@ mod tests {
 
     #[test]
     fn parses_infected_line() {
-        let entry =
-            parse_clamscan_line("C:\\tmp\\eicar.com: Win.Test.EICAR_HDB-1 FOUND").unwrap();
+        let entry = parse_clamscan_line("C:\\tmp\\eicar.com: Win.Test.EICAR_HDB-1 FOUND").unwrap();
         assert_eq!(
             entry.verdict,
-            RawVerdict::Infected { signature: "Win.Test.EICAR_HDB-1".to_string() }
+            RawVerdict::Infected {
+                signature: "Win.Test.EICAR_HDB-1".to_string()
+            }
         );
     }
 
@@ -314,7 +331,9 @@ mod tests {
             parse_clamscan_line("C:\\protegido\\arquivo.dat: Permission denied ERROR").unwrap();
         assert_eq!(
             entry.verdict,
-            RawVerdict::Error { message: "Permission denied".to_string() }
+            RawVerdict::Error {
+                message: "Permission denied".to_string()
+            }
         );
     }
 

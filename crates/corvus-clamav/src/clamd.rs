@@ -105,7 +105,10 @@ fn render_conf(config: &ClamdConfig) -> String {
     let mut conf = String::new();
     conf.push_str("# Gerado automaticamente pelo CorvusAV — não editar manualmente.\n");
     conf.push_str("Foreground yes\n");
-    conf.push_str(&format!("DatabaseDirectory {}\n", config.database_dir.display()));
+    conf.push_str(&format!(
+        "DatabaseDirectory {}\n",
+        config.database_dir.display()
+    ));
     conf.push_str("TCPAddr 127.0.0.1\n");
     conf.push_str(&format!("TCPSocket {}\n", config.port));
     conf.push_str(&format!("MaxThreads {}\n", config.max_threads));
@@ -187,7 +190,10 @@ pub struct ClamdAdapter {
 
 impl ClamdAdapter {
     pub fn new(executable: PathBuf, database_dir: PathBuf) -> Self {
-        Self { executable, database_dir }
+        Self {
+            executable,
+            database_dir,
+        }
     }
 
     /// Localiza o `clamd` e a base de assinaturas da instalação atual do

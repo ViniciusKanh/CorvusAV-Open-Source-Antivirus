@@ -36,7 +36,10 @@ mod tests {
 
     #[test]
     fn clean_entry_has_no_detections() {
-        let entry = RawScanEntry { path: "a.txt".into(), verdict: RawVerdict::Clean };
+        let entry = RawScanEntry {
+            path: "a.txt".into(),
+            verdict: RawVerdict::Clean,
+        };
         let (verdict, detections) =
             classify_entry(&entry, "ClamAV", Some("1.3.0"), ScanResultId::new());
         assert_eq!(verdict, Verdict::Clean);
@@ -47,7 +50,9 @@ mod tests {
     fn infected_entry_produces_malicious_verdict_with_evidence() {
         let entry = RawScanEntry {
             path: "eicar.com".into(),
-            verdict: RawVerdict::Infected { signature: "Win.Test.EICAR_HDB-1".into() },
+            verdict: RawVerdict::Infected {
+                signature: "Win.Test.EICAR_HDB-1".into(),
+            },
         };
         let (verdict, detections) =
             classify_entry(&entry, "ClamAV", Some("1.3.0"), ScanResultId::new());
@@ -60,10 +65,11 @@ mod tests {
     fn error_entry_is_never_classified_as_clean() {
         let entry = RawScanEntry {
             path: "bloqueado.dat".into(),
-            verdict: RawVerdict::Error { message: "Permission denied".into() },
+            verdict: RawVerdict::Error {
+                message: "Permission denied".into(),
+            },
         };
-        let (verdict, detections) =
-            classify_entry(&entry, "ClamAV", None, ScanResultId::new());
+        let (verdict, detections) = classify_entry(&entry, "ClamAV", None, ScanResultId::new());
         assert_eq!(verdict, Verdict::Error);
         assert!(detections.is_empty());
     }

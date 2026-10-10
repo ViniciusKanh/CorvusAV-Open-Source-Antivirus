@@ -47,8 +47,14 @@ macro_rules! typed_id {
 }
 
 typed_id!(ScanJobId, "Identificador de uma tarefa de verificação.");
-typed_id!(ScanResultId, "Identificador do resultado de um arquivo examinado.");
-typed_id!(DetectionId, "Identificador de uma detecção reportada por um motor.");
+typed_id!(
+    ScanResultId,
+    "Identificador do resultado de um arquivo examinado."
+);
+typed_id!(
+    DetectionId,
+    "Identificador de uma detecção reportada por um motor."
+);
 typed_id!(QuarantineItemId, "Identificador de um item em quarentena.");
 
 #[cfg(test)]

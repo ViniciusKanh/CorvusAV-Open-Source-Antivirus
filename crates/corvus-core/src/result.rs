@@ -52,10 +52,12 @@ impl Verdict {
     pub fn combine_all(verdicts: impl IntoIterator<Item = Verdict>) -> Verdict {
         verdicts
             .into_iter()
-            .fold(None, |acc, v| Some(match acc {
-                Some(current) => Verdict::combine(current, v),
-                None => v,
-            }))
+            .fold(None, |acc, v| {
+                Some(match acc {
+                    Some(current) => Verdict::combine(current, v),
+                    None => v,
+                })
+            })
             .unwrap_or(Verdict::Unknown)
     }
 }
@@ -128,8 +130,14 @@ mod tests {
 
     #[test]
     fn combine_never_downgrades_to_clean() {
-        assert_eq!(Verdict::combine(Verdict::Clean, Verdict::Error), Verdict::Error);
-        assert_eq!(Verdict::combine(Verdict::Clean, Verdict::Unknown), Verdict::Unknown);
+        assert_eq!(
+            Verdict::combine(Verdict::Clean, Verdict::Error),
+            Verdict::Error
+        );
+        assert_eq!(
+            Verdict::combine(Verdict::Clean, Verdict::Unknown),
+            Verdict::Unknown
+        );
         assert_eq!(
             Verdict::combine(Verdict::Suspicious, Verdict::Malicious),
             Verdict::Malicious

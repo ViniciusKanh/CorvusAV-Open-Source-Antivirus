@@ -77,7 +77,10 @@ impl QuarantineManager {
                 // ponto de vista de segurança) mesmo que não consigamos
                 // reler o hash agora; registramos a falha real em vez de
                 // inventar um hash ou fingir que a verificação passou.
-                tracing::warn!("falha ao recalcular hash após isolar {}: {e}", destination.display());
+                tracing::warn!(
+                    "falha ao recalcular hash após isolar {}: {e}",
+                    destination.display()
+                );
                 None
             }
         };
@@ -182,7 +185,11 @@ impl QuarantineManager {
         Ok(item)
     }
 
-    fn fail_restore(&self, item: &mut QuarantineItem, message: String) -> Result<(), QuarantineError> {
+    fn fail_restore(
+        &self,
+        item: &mut QuarantineItem,
+        message: String,
+    ) -> Result<(), QuarantineError> {
         item.state = QuarantineState::RestoreFailed;
         item.last_error = Some(message);
         self.db.update_quarantine_item(item)?;
@@ -267,7 +274,8 @@ mod tests {
 
     #[test]
     fn quarantine_then_restore_roundtrips_file_back_to_original_path() {
-        let base = std::env::temp_dir().join(format!("corvusav-test-quarantine-{}", std::process::id()));
+        let base =
+            std::env::temp_dir().join(format!("corvusav-test-quarantine-{}", std::process::id()));
         let source_dir = base.join("origem");
         let quarantine_dir = base.join("quarentena");
         std::fs::create_dir_all(&source_dir).unwrap();
@@ -279,11 +287,19 @@ mod tests {
         let item = manager
             .quarantine_file(&original, "teste: ameaça simulada".to_string(), None)
             .expect("isolar deveria funcionar");
-        assert!(!original.exists(), "arquivo original deveria ter sido movido");
+        assert!(
+            !original.exists(),
+            "arquivo original deveria ter sido movido"
+        );
         assert_eq!(item.file_hash_before, item.file_hash_after);
 
-        let restored = manager.restore_item(item.id).expect("restaurar deveria funcionar");
-        assert!(original.is_file(), "arquivo deveria voltar ao caminho original");
+        let restored = manager
+            .restore_item(item.id)
+            .expect("restaurar deveria funcionar");
+        assert!(
+            original.is_file(),
+            "arquivo deveria voltar ao caminho original"
+        );
         assert_eq!(restored.state, QuarantineState::Restored);
 
         std::fs::remove_dir_all(&base).ok();
@@ -291,7 +307,10 @@ mod tests {
 
     #[test]
     fn restoring_over_an_existing_file_is_refused_without_overwriting() {
-        let base = std::env::temp_dir().join(format!("corvusav-test-quarantine-conflict-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!(
+            "corvusav-test-quarantine-conflict-{}",
+            std::process::id()
+        ));
         let source_dir = base.join("origem");
         let quarantine_dir = base.join("quarentena");
         std::fs::create_dir_all(&source_dir).unwrap();
@@ -318,7 +337,10 @@ mod tests {
 
     #[test]
     fn quarantining_a_missing_file_fails_instead_of_fabricating_an_item() {
-        let base = std::env::temp_dir().join(format!("corvusav-test-quarantine-missing-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!(
+            "corvusav-test-quarantine-missing-{}",
+            std::process::id()
+        ));
         let quarantine_dir = base.join("quarentena");
         let manager = manager_with_dir(&quarantine_dir);
 

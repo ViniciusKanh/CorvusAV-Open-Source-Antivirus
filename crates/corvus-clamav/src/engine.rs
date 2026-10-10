@@ -62,7 +62,13 @@ impl ScanEngineAdapter {
     ) -> Result<Vec<RawScanEntry>, ClamAvError> {
         if let Some(clamd) = &self.clamd {
             match clamd
-                .run_scan(targets, exclude_dirs, cancel.clone(), timeout, &mut on_entry)
+                .run_scan(
+                    targets,
+                    exclude_dirs,
+                    cancel.clone(),
+                    timeout,
+                    &mut on_entry,
+                )
                 .await
             {
                 Ok(entries) => return Ok(entries),
@@ -80,7 +86,9 @@ impl ScanEngineAdapter {
             }
         }
 
-        self.clamscan.run_scan(targets, exclude_dirs, cancel, timeout, on_entry).await
+        self.clamscan
+            .run_scan(targets, exclude_dirs, cancel, timeout, on_entry)
+            .await
     }
 }
 

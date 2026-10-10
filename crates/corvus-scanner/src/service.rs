@@ -13,7 +13,10 @@ use corvus_core::{
     EngineHealth, QuarantineItem, QuarantineItemId, ScanJob, ScanJobId, ScanKind, ScanResult,
     ScanResultId, ScanStatus, Verdict, VerdictCounts,
 };
-use corvus_policy::{classify_entry, full_scan_targets, quick_scan_targets, validate_custom_targets, FullScanAvailability};
+use corvus_policy::{
+    classify_entry, full_scan_targets, quick_scan_targets, validate_custom_targets,
+    FullScanAvailability,
+};
 use corvus_quarantine::QuarantineManager;
 use corvus_storage::Database;
 use tokio::sync::{mpsc, watch};
@@ -62,11 +65,13 @@ impl ScannerService {
     /// Saúde atual do mecanismo de varredura (nunca reporta `Available` sem
     /// ter sondado o executável real).
     pub async fn engine_health(&self) -> EngineHealth {
-        let executable = self.clamav.as_ref().map(|a| a.executable_path().to_path_buf());
-        let result = tokio::task::spawn_blocking(move || {
-            corvus_clamav::probe_health(executable.as_deref())
-        })
-        .await;
+        let executable = self
+            .clamav
+            .as_ref()
+            .map(|a| a.executable_path().to_path_buf());
+        let result =
+            tokio::task::spawn_blocking(move || corvus_clamav::probe_health(executable.as_deref()))
+                .await;
 
         match result {
             Ok(health) => health,
@@ -124,10 +129,9 @@ impl ScannerService {
     /// (rápida, completa ou personalizada). Lista vazia por padrão.
     pub async fn get_scan_exclusions(&self) -> Result<Vec<String>, ScannerError> {
         let db = self.db.clone();
-        let raw = tokio::task::spawn_blocking(move || {
-            db.get_setting(Self::SCAN_EXCLUSIONS_SETTING_KEY)
-        })
-        .await??;
+        let raw =
+            tokio::task::spawn_blocking(move || db.get_setting(Self::SCAN_EXCLUSIONS_SETTING_KEY))
+                .await??;
         match raw {
             Some(json) => Ok(serde_json::from_str(&json).unwrap_or_default()),
             None => Ok(Vec::new()),
@@ -232,7 +236,10 @@ impl ScannerService {
     /// Retorna erro se a tarefa não estiver mais ativa (já concluída,
     /// cancelada ou com falha).
     pub fn cancel_scan(&self, job_id: ScanJobId) -> Result<(), ScannerError> {
-        let jobs = self.active_jobs.lock().expect("active_jobs mutex envenenado");
+        let jobs = self
+            .active_jobs
+            .lock()
+            .expect("active_jobs mutex envenenado");
         match jobs.get(&job_id) {
             Some(tx) => {
                 let _ = tx.send(true);
@@ -266,8 +273,7 @@ impl ScannerService {
             }
         };
 
-        let target_strings: Vec<String> =
-            targets.iter().map(|p| p.display().to_string()).collect();
+        let target_strings: Vec<String> = targets.iter().map(|p| p.display().to_string()).collect();
         let mut job = ScanJob::new(kind, target_strings);
         job.files_total = None; // desconhecido até o clamscan concluir; ver docs/roadmap.
         let job_id = job.id;
@@ -291,7 +297,10 @@ impl ScannerService {
         let exclusions = self.get_scan_exclusions().await.unwrap_or_default();
 
         tokio::spawn(async move {
-            run_job(&mut job, targets, exclusions, clamav, &db, cancel_rx, &events).await;
+            run_job(
+                &mut job, targets, exclusions, clamav, &db, cancel_rx, &events,
+            )
+            .await;
             active_jobs
                 .lock()
                 .expect("active_jobs mutex envenenado")
@@ -347,11 +356,18 @@ async fn run_job(
     let run_result = clamav
         .run_scan(&targets, &exclusions, cancel_rx, SCAN_TIMEOUT, |entry| {
             let scan_result_id = ScanResultId::new();
-            let (verdict, detections) =
-                classify_entry(entry, ENGINE_NAME, engine_version.as_deref(), scan_result_id);
+            let (verdict, detections) = classify_entry(
+                entry,
+                ENGINE_NAME,
+                engine_version.as_deref(),
+                scan_result_id,
+            );
 
             let now = std::time::Instant::now();
-            let duration_ms = now.duration_since(last_entry_at).as_millis().min(u128::from(u64::MAX)) as u64;
+            let duration_ms = now
+                .duration_since(last_entry_at)
+                .as_millis()
+                .min(u128::from(u64::MAX)) as u64;
             last_entry_at = now;
 
             job.files_scanned += 1;
@@ -455,13 +471,14 @@ async fn persist_results(db: &Arc<Database>, results: &[ScanResult]) {
     }
     let db = db.clone();
     let results = results.to_vec();
-    let outcome = tokio::task::spawn_blocking(move || -> Result<(), corvus_storage::StorageError> {
-        for result in &results {
-            db.insert_scan_result(result)?;
-        }
-        Ok(())
-    })
-    .await;
+    let outcome =
+        tokio::task::spawn_blocking(move || -> Result<(), corvus_storage::StorageError> {
+            for result in &results {
+                db.insert_scan_result(result)?;
+            }
+            Ok(())
+        })
+        .await;
 
     match outcome {
         Ok(Ok(())) => {}

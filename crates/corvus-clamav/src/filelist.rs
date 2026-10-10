@@ -45,7 +45,9 @@ fn is_cloud_only_placeholder(_metadata: &std::fs::Metadata) -> bool {
 }
 
 fn is_excluded(path: &Path, exclude_dirs: &[PathBuf]) -> bool {
-    exclude_dirs.iter().any(|excluded| path.starts_with(excluded))
+    exclude_dirs
+        .iter()
+        .any(|excluded| path.starts_with(excluded))
 }
 
 /// Percorre recursivamente os diretórios em `targets`, retornando os
@@ -97,7 +99,9 @@ pub fn enumerate_files(
 
         if metadata.is_file() {
             if is_cloud_only_placeholder(&metadata) {
-                skipped.push(SkippedCloudFile { path: target.clone() });
+                skipped.push(SkippedCloudFile {
+                    path: target.clone(),
+                });
             } else {
                 files.push(target.clone());
             }
@@ -174,7 +178,10 @@ mod tests {
     use super::*;
 
     fn make_temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("corvusav-test-filelist-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "corvusav-test-filelist-{name}-{}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&dir).expect("falha ao preparar diretório de teste");
         dir
     }
@@ -205,10 +212,8 @@ mod tests {
         std::fs::write(root.join("incluido.txt"), b"x").unwrap();
         std::fs::write(excluded.join("ignorado.txt"), b"x").unwrap();
 
-        let (files, _) = enumerate_files(
-            &[root.clone()],
-            &[excluded.to_string_lossy().to_string()],
-        );
+        let (files, _) =
+            enumerate_files(&[root.clone()], &[excluded.to_string_lossy().to_string()]);
 
         std::fs::remove_dir_all(&root).ok();
 

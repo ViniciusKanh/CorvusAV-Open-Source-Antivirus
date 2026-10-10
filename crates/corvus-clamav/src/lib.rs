@@ -14,8 +14,11 @@ mod engine;
 mod filelist;
 mod freshclam;
 
-pub use adapter::{ClamAvAdapter, ClamAvError, RawScanEntry, RawVerdict, parse_clamscan_line};
+pub use adapter::{parse_clamscan_line, ClamAvAdapter, ClamAvError, RawScanEntry, RawVerdict};
 pub use clamd::{ClamdAdapter, ClamdError};
-pub use detect::{locate_clamd, locate_clamscan, locate_freshclam, probe_health, resolve_database_dir, EngineVersionInfo};
+pub use detect::{
+    locate_clamd, locate_clamscan, locate_freshclam, probe_health, resolve_database_dir,
+    EngineVersionInfo,
+};
 pub use engine::ScanEngineAdapter;
 pub use freshclam::{run_freshclam, FreshclamError, FreshclamOutcome};
