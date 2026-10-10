@@ -1,4 +1,4 @@
-import type { EngineAvailability, ScanKind, ScanStatus, Verdict } from '../types/corvus'
+import type { EngineAvailability, QuarantineState, ScanKind, ScanStatus, Verdict } from '../types/corvus'
 
 export function engineAvailabilityLabel(availability: EngineAvailability): string {
   switch (availability) {
@@ -17,6 +17,22 @@ export function engineAvailabilityLabel(availability: EngineAvailability): strin
   }
 }
 
+export type Tone = 'success' | 'warning' | 'danger' | 'neutral'
+
+export function engineAvailabilityTone(availability: EngineAvailability): Tone {
+  switch (availability) {
+    case 'available':
+      return 'success'
+    case 'signatures_missing':
+    case 'signatures_outdated':
+    case 'scan_in_progress':
+      return 'warning'
+    case 'unavailable':
+    case 'initialization_failed':
+      return 'danger'
+  }
+}
+
 export function verdictLabel(verdict: Verdict): string {
   switch (verdict) {
     case 'clean':
@@ -31,8 +47,6 @@ export function verdictLabel(verdict: Verdict): string {
       return 'Erro ao examinar'
   }
 }
-
-export type Tone = 'success' | 'warning' | 'danger' | 'neutral'
 
 export function verdictTone(verdict: Verdict): Tone {
   switch (verdict) {
@@ -88,5 +102,31 @@ export function scanKindLabel(kind: ScanKind): string {
       return 'Verificação completa'
     case 'custom':
       return 'Verificação personalizada'
+  }
+}
+
+export function quarantineStateLabel(state: QuarantineState): string {
+  switch (state) {
+    case 'quarantined':
+      return 'Em quarentena'
+    case 'restore_requested':
+      return 'Restauração solicitada'
+    case 'restored':
+      return 'Restaurado'
+    case 'restore_failed':
+      return 'Falha ao restaurar'
+  }
+}
+
+export function quarantineStateTone(state: QuarantineState): Tone {
+  switch (state) {
+    case 'quarantined':
+      return 'warning'
+    case 'restore_requested':
+      return 'neutral'
+    case 'restored':
+      return 'success'
+    case 'restore_failed':
+      return 'danger'
   }
 }

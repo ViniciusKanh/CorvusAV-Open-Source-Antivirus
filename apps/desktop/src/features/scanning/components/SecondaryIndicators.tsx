@@ -1,5 +1,5 @@
 import { formatDateTime } from '../../../lib/format'
-import { engineAvailabilityLabel, scanKindLabel, scanStatusLabel } from '../../../lib/labels'
+import { engineAvailabilityLabel, scanKindLabel } from '../../../lib/labels'
 import { useEngineStore } from '../../../stores/engineStore'
 import { useScanStore } from '../../../stores/scanStore'
 
@@ -24,6 +24,20 @@ export function SecondaryIndicators() {
 
   const lastJob = history[0] ?? null
 
+  // O card "Estado do mecanismo" descreve a disponibilidade do próprio
+  // motor ClamAV — nunca o resultado da última verificação (isso já tem
+  // seu próprio card em "Última verificação" e na tabela de histórico).
+  // Misturar os dois aqui já causou confusão real: uma verificação que
+  // falhou fazia este card parecer dizer "o motor falhou", mesmo com o
+  // motor disponível e saudável.
+  const engineHint = !health
+    ? 'Consultando o mecanismo…'
+    : health.availability === 'available'
+      ? health.engine_version
+        ? `ClamAV ${health.engine_version}`
+        : 'Pronto para verificar'
+      : (health.last_error ?? 'Sem detalhes adicionais informados pelo mecanismo')
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <IndicatorCard
@@ -34,12 +48,12 @@ export function SecondaryIndicators() {
       <IndicatorCard
         label="Assinaturas"
         value={health?.signature_version ?? '—'}
-        hint={health?.engine_version ?? 'ClamAV'}
+        hint={health?.signatures_updated_at ? formatDateTime(health.signatures_updated_at) : 'Data de atualização desconhecida'}
       />
       <IndicatorCard
         label="Estado do mecanismo"
         value={health ? engineAvailabilityLabel(health.availability) : '—'}
-        hint={lastJob ? scanStatusLabel(lastJob.status) : 'Sem verificações recentes'}
+        hint={engineHint}
       />
       <IndicatorCard
         label="Itens recentemente examinados"

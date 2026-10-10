@@ -7,7 +7,7 @@ mod state;
 
 use std::sync::Arc;
 
-use corvus_clamav::ClamAvAdapter;
+use corvus_clamav::ScanEngineAdapter;
 use corvus_scanner::{ScanEvent, ScannerService};
 use corvus_storage::Database;
 use tauri::Emitter;
@@ -26,7 +26,22 @@ pub fn run() {
         Database::open(&db_path).expect("falha ao abrir/migrar o banco de dados do CorvusAV"),
     );
 
-    let clamav = ClamAvAdapter::from_system();
+    // Qualquer tarefa presa em um estado não terminal pertence a uma
+    // execução anterior do processo (o próprio processo que a executava não
+    // existe mais) — nunca a uma verificação em andamento nesta sessão, que
+    // ainda nem começou. Corrigir aqui evita entradas eternas de
+    // "Verificando" no histórico após o aplicativo ser fechado no meio de
+    // uma varredura.
+    match db.reconcile_interrupted_jobs() {
+        Ok(0) => {}
+        Ok(count) => tracing::warn!(
+            count,
+            "verificações presas de uma execução anterior foram marcadas como falha"
+        ),
+        Err(error) => tracing::error!(%error, "falha ao reconciliar verificações interrompidas"),
+    }
+
+    let clamav = ScanEngineAdapter::from_system();
     if clamav.is_none() {
         tracing::warn!(
             "clamscan não foi encontrado no sistema; a verificação ficará indisponível \
@@ -62,7 +77,15 @@ pub fn run() {
             commands::cancel_scan,
             commands::recent_jobs,
             commands::job_results,
+            commands::clear_scan_history,
+            commands::verdict_summaries,
+            commands::get_scan_exclusions,
+            commands::set_scan_exclusions,
+            commands::update_signatures,
             commands::pick_custom_scan_targets,
+            commands::quarantine_result,
+            commands::list_quarantine_items,
+            commands::restore_quarantine_item,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o CorvusAV");

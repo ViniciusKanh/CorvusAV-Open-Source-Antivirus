@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ScanHistoryTable } from '../../components/shared/ScanHistoryTable'
 import { useScanHistory } from '../../hooks/useScanHistory'
-import { pickCustomScanTargets, startCustomScan, startQuickScan } from '../../services/corvusApi'
+import { clearScanHistory, pickCustomScanTargets, startCustomScan, startQuickScan } from '../../services/corvusApi'
 import { useEngineStore } from '../../stores/engineStore'
 import { useScanStore } from '../../stores/scanStore'
 import { EngineStatusPanel } from './components/EngineStatusPanel'
@@ -14,10 +14,39 @@ export function ScanningPage() {
   const loadingHealth = useEngineStore((s) => s.loading)
   const healthError = useEngineStore((s) => s.error)
   const activeJob = useScanStore((s) => s.activeJob)
-  const { history, loading: historyLoading } = useScanHistory()
+  const { history, loading: historyLoading, reload: reloadHistory } = useScanHistory()
 
   const [busyKind, setBusyKind] = useState<'quick' | 'custom' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [clearingHistory, setClearingHistory] = useState(false)
+  const [clearError, setClearError] = useState<string | null>(null)
+  const [clearMessage, setClearMessage] = useState<string | null>(null)
+
+  const hasClearableHistory = history.some(
+    (job) => job.status === 'failed' || job.status === 'cancelled',
+  )
+
+  async function handleClearHistory() {
+    setClearError(null)
+    setClearMessage(null)
+    setClearingHistory(true)
+    try {
+      const removed = await clearScanHistory()
+      await reloadHistory()
+      // Feedback explícito do resultado real (nunca presumido): se o
+      // número de itens visivelmente removidos não bater com o esperado,
+      // isso fica claro aqui em vez de parecer que o clique não fez nada.
+      setClearMessage(
+        removed > 0
+          ? `${removed} ${removed === 1 ? 'verificação removida' : 'verificações removidas'}.`
+          : 'Nenhuma verificação com falha ou cancelamento foi encontrada para remover.',
+      )
+    } catch (error) {
+      setClearError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setClearingHistory(false)
+    }
+  }
 
   const engineAvailable = health?.availability === 'available'
 
@@ -78,9 +107,23 @@ export function ScanningPage() {
       <SecondaryIndicators />
 
       <div className="rounded-2xl border border-white/5 bg-brand-surface/20 p-5">
-        <h2 className="mb-3 font-display text-base font-semibold text-brand-text">
-          Verificações recentes
-        </h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-display text-base font-semibold text-brand-text">
+            Verificações recentes
+          </h2>
+          {hasClearableHistory && (
+            <button
+              type="button"
+              onClick={() => void handleClearHistory()}
+              disabled={clearingHistory}
+              className="shrink-0 rounded-md px-2.5 py-1.5 text-xs font-medium text-brand-text-secondary hover:bg-white/5 hover:text-brand-text disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {clearingHistory ? 'Limpando…' : 'Limpar falhas e cancelamentos'}
+            </button>
+          )}
+        </div>
+        {clearError && <p className="mb-3 text-xs text-brand-danger">{clearError}</p>}
+        {clearMessage && <p className="mb-3 text-xs text-brand-text-secondary">{clearMessage}</p>}
         <ScanHistoryTable jobs={history} loading={historyLoading} />
       </div>
     </div>

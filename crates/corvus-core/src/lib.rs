@@ -14,5 +14,5 @@ pub use engine::{EngineAvailability, EngineHealth};
 pub use error::CoreError;
 pub use ids::{DetectionId, QuarantineItemId, ScanJobId, ScanResultId};
 pub use quarantine::{QuarantineItem, QuarantineState};
-pub use result::{Detection, ScanResult, Verdict};
+pub use result::{Detection, ScanResult, Verdict, VerdictCounts};
 pub use scan::{ScanJob, ScanKind, ScanStatus};

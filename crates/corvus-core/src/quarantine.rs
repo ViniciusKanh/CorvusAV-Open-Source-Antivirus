@@ -34,4 +34,8 @@ pub struct QuarantineItem {
     pub file_hash_after: Option<String>,
     pub quarantined_at: OffsetDateTime,
     pub restored_at: Option<OffsetDateTime>,
+    /// Motivo real da última falha de restauração (estado `RestoreFailed`).
+    /// `None` em qualquer outro estado — nunca inventamos uma explicação
+    /// quando a operação deu certo ou ainda não foi tentada.
+    pub last_error: Option<String>,
 }

@@ -6,7 +6,7 @@
 //! banco legível e consultável, e para falhar explicitamente diante de um
 //! valor corrompido em vez de silenciosamente aceitar qualquer string.
 
-use corvus_core::{EngineAvailability, ScanKind, ScanStatus, Verdict};
+use corvus_core::{EngineAvailability, QuarantineState, ScanKind, ScanStatus, Verdict};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
@@ -109,6 +109,29 @@ pub fn engine_availability_from_str(s: &str) -> StorageResult<EngineAvailability
         other => Err(StorageError::Database(rusqlite::Error::InvalidColumnType(
             0,
             format!("engine_availability desconhecido: {other}"),
+            rusqlite::types::Type::Text,
+        ))),
+    }
+}
+
+pub fn quarantine_state_to_str(state: QuarantineState) -> &'static str {
+    match state {
+        QuarantineState::Quarantined => "quarantined",
+        QuarantineState::RestoreRequested => "restore_requested",
+        QuarantineState::Restored => "restored",
+        QuarantineState::RestoreFailed => "restore_failed",
+    }
+}
+
+pub fn quarantine_state_from_str(s: &str) -> StorageResult<QuarantineState> {
+    match s {
+        "quarantined" => Ok(QuarantineState::Quarantined),
+        "restore_requested" => Ok(QuarantineState::RestoreRequested),
+        "restored" => Ok(QuarantineState::Restored),
+        "restore_failed" => Ok(QuarantineState::RestoreFailed),
+        other => Err(StorageError::Database(rusqlite::Error::InvalidColumnType(
+            0,
+            format!("quarantine_state desconhecido: {other}"),
             rusqlite::types::Type::Text,
         ))),
     }

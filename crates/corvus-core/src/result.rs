@@ -60,6 +60,38 @@ impl Verdict {
     }
 }
 
+/// Contagem de vereditos de uma verificação, usada para dar visibilidade
+/// rápida da "qualidade" de uma varredura (quantos itens vieram limpos,
+/// suspeitos, maliciosos, indeterminados ou com erro) sem precisar expandir
+/// cada resultado individual no histórico. Deliberadamente não compõe os
+/// vereditos em uma única pontuação — ver o aviso em
+/// [`Verdict::combine`] sobre nunca misturar vereditos heterogêneos em um
+/// só número.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerdictCounts {
+    pub clean: u64,
+    pub suspicious: u64,
+    pub malicious: u64,
+    pub unknown: u64,
+    pub error: u64,
+}
+
+impl VerdictCounts {
+    pub fn add(&mut self, verdict: Verdict) {
+        match verdict {
+            Verdict::Clean => self.clean += 1,
+            Verdict::Suspicious => self.suspicious += 1,
+            Verdict::Malicious => self.malicious += 1,
+            Verdict::Unknown => self.unknown += 1,
+            Verdict::Error => self.error += 1,
+        }
+    }
+
+    pub fn total(&self) -> u64 {
+        self.clean + self.suspicious + self.malicious + self.unknown + self.error
+    }
+}
+
 /// Uma detecção específica reportada por um mecanismo para um resultado.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Detection {

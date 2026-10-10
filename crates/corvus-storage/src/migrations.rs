@@ -10,11 +10,18 @@ struct Migration {
     sql: &'static str,
 }
 
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "0001_init",
-    sql: include_str!("../migrations/0001_init.sql"),
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "0001_init",
+        sql: include_str!("../migrations/0001_init.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "0002_quarantine",
+        sql: include_str!("../migrations/0002_quarantine.sql"),
+    },
+];
 
 /// Aplica todas as migrations ainda não aplicadas, em ordem, cada uma em sua
 /// própria transação. Idempotente: pode ser chamada a cada inicialização.
@@ -66,7 +73,7 @@ mod tests {
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM schema_migrations", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(count, 1);
+        assert_eq!(count, 2);
 
         // Tabelas mínimas exigidas devem existir.
         for table in [
@@ -76,6 +83,7 @@ mod tests {
             "engine_status",
             "application_settings",
             "audit_events",
+            "quarantine_items",
         ] {
             let exists: i64 = conn
                 .query_row(

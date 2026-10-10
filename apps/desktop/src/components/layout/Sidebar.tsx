@@ -1,6 +1,6 @@
 import { History, LayoutDashboard, RefreshCw, Search, Settings, ShieldAlert } from 'lucide-react'
 import type { ComponentType } from 'react'
-import logoMark from '../../assets/corvusav-mark.svg'
+import logoMark from '../../assets/corvusav-mark.png'
 import { cn } from '../../lib/cn'
 import { useEngineStore } from '../../stores/engineStore'
 import { useUiStore } from '../../stores/uiStore'

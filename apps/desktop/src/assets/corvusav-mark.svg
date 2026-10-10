@@ -4,6 +4,8 @@
   Interpretação vetorial original e simplificada, inspirada na referência
   de identidade visual fornecida (corvo + escudo, paleta azul/ciano).
   Não é um traçado do material de referência nem uma imagem incorporada.
+  Revisão 2: silhueta sólida (cabeça, bico e pescoço legíveis em perfil),
+  substituindo a malha de linhas cruzadas da primeira versão.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" width="200" height="220">
   <defs>
@@ -11,8 +13,9 @@
       <stop offset="0%" stop-color="#14243A"/>
       <stop offset="100%" stop-color="#0B1220"/>
     </linearGradient>
-    <linearGradient id="headFill" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1E3A5F"/>
+    <linearGradient id="headFill" x1="0%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%" stop-color="#2E4A72"/>
+      <stop offset="55%" stop-color="#17283F"/>
       <stop offset="100%" stop-color="#0B1220"/>
     </linearGradient>
   </defs>
@@ -22,22 +25,27 @@
            C54,198 18,166 18,118 L18,42 Z"
         fill="url(#shieldFill)" stroke="#00E5FF" stroke-width="5" stroke-linejoin="round"/>
 
-  <!-- Cabeça de corvo geométrica (perfil, bico à direita) -->
-  <path d="M62,66 L98,56 L128,70 L168,96 L140,103 L150,112 L120,118
-           L108,150 L88,162 L58,164 L66,126 L44,116 L50,86 Z"
-        fill="url(#headFill)" stroke="#38B2F6" stroke-width="3" stroke-linejoin="round"/>
+  <!-- Cabeça de corvo em perfil (bico à direita) -->
+  <path d="M72,46
+           C60,54 50,62 48,78
+           C46,100 46,122 50,140
+           C54,153 62,164 73,173
+           C83,169 90,161 93,152
+           C97,144 103,138 112,134
+           C125,128 142,120 158,109
+           C148,103 134,96 120,90
+           C110,84 102,76 97,67
+           C91,57 81,50 72,46 Z"
+        fill="url(#headFill)" stroke="#38B2F6" stroke-width="2.5" stroke-linejoin="round"/>
 
-  <!-- Facetas geométricas internas -->
-  <g stroke="#00E5FF" stroke-width="1.5" stroke-linecap="round" opacity="0.55" fill="none">
-    <path d="M98,56 L120,118"/>
-    <path d="M128,70 L108,150"/>
-    <path d="M62,66 L120,118"/>
-    <path d="M44,116 L108,150"/>
-  </g>
+  <!-- Aresta do bico (realce) -->
+  <path d="M120,90 C134,96 148,103 158,109" stroke="#00E5FF" stroke-width="1.5" opacity="0.55" fill="none" stroke-linecap="round"/>
+  <!-- Reflexo na testa/nuca -->
+  <path d="M72,46 C82,50 90,56 96,65" stroke="#E5E7EB" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.85"/>
+  <!-- Separação sutil de penas no peito -->
+  <path d="M59,102 C61,116 63,130 67,144" stroke="#0B1220" stroke-width="1.5" opacity="0.35" fill="none"/>
 
   <!-- Olho -->
-  <circle cx="104" cy="88" r="5" fill="#00E5FF"/>
-
-  <!-- Bico (destaque) -->
-  <path d="M128,70 L168,96 L140,103 Z" fill="#101C2E" stroke="#00E5FF" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="101" cy="79" r="5.5" fill="#00E5FF"/>
+  <circle cx="99" cy="77" r="1.3" fill="#E5E7EB" opacity="0.9"/>
 </svg>

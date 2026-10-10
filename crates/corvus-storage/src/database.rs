@@ -3,7 +3,11 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use corvus_core::{Detection, DetectionId, EngineHealth, ScanJob, ScanJobId, ScanResult, ScanResultId};
+use corvus_core::{
+    Detection, DetectionId, EngineHealth, QuarantineItem, QuarantineItemId, ScanJob, ScanJobId,
+    ScanResult, ScanResultId, ScanStatus, VerdictCounts,
+};
+use std::collections::HashMap;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -175,6 +179,55 @@ impl Database {
         })
     }
 
+    /// Finaliza como `Failed` qualquer tarefa que tenha ficado presa em um
+    /// estado não terminal (`queued`/`preparing`/`running`/`cancel_requested`)
+    /// de uma execução anterior do aplicativo — por exemplo, se o CorvusAV
+    /// foi fechado (ou travou) no meio de uma verificação. Sem isso, essas
+    /// tarefas permaneceriam exibindo "Verificando" no histórico para
+    /// sempre, mesmo que nenhum processo esteja de fato em execução.
+    /// Chamada uma vez na inicialização do aplicativo, antes de qualquer
+    /// nova verificação ser iniciada. Retorna quantas tarefas foram
+    /// corrigidas.
+    pub fn reconcile_interrupted_jobs(&self) -> StorageResult<u64> {
+        let conn = self.conn.lock().expect("mutex do banco envenenado");
+        let now = to_rfc3339(OffsetDateTime::now_utc())?;
+        let affected = conn.execute(
+            "UPDATE scan_jobs SET
+                status = ?1,
+                finished_at = COALESCE(finished_at, ?2),
+                error_message = ?3
+             WHERE status IN (?4, ?5, ?6, ?7)",
+            params![
+                scan_status_to_str(ScanStatus::Failed),
+                now,
+                "Interrompida: o CorvusAV foi encerrado antes da conclusão desta verificação.",
+                scan_status_to_str(ScanStatus::Queued),
+                scan_status_to_str(ScanStatus::Preparing),
+                scan_status_to_str(ScanStatus::Running),
+                scan_status_to_str(ScanStatus::CancelRequested),
+            ],
+        )?;
+        Ok(affected as u64)
+    }
+
+    /// Remove do histórico as tarefas cujo status esteja em `statuses`.
+    /// `scan_results`/`detections` associados são removidos em cascata
+    /// (ver `ON DELETE CASCADE` no esquema). Deliberadamente não aceita
+    /// estados não terminais (ver `ScanStatus::is_terminal`): o chamador
+    /// (`ScannerService::clear_history`) é responsável por restringir a
+    /// operação a estados seguros de apagar.
+    pub fn delete_scan_jobs_by_status(&self, statuses: &[ScanStatus]) -> StorageResult<u64> {
+        if statuses.is_empty() {
+            return Ok(0);
+        }
+        let conn = self.conn.lock().expect("mutex do banco envenenado");
+        let placeholders = statuses.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let sql = format!("DELETE FROM scan_jobs WHERE status IN ({placeholders})");
+        let values: Vec<&str> = statuses.iter().map(|s| scan_status_to_str(*s)).collect();
+        let affected = conn.execute(&sql, rusqlite::params_from_iter(values))?;
+        Ok(affected as u64)
+    }
+
     // ---------------------------------------------------------------
     // scan_results + detections
     // ---------------------------------------------------------------
@@ -221,6 +274,43 @@ impl Database {
         Ok(())
     }
 
+    /// Contagem de vereditos por tarefa, para as tarefas em `job_ids`.
+    /// Tarefas sem nenhum resultado registrado (ex.: falharam antes de
+    /// examinar qualquer arquivo) simplesmente não aparecem no mapa — o
+    /// chamador deve tratar a ausência como "nenhum resultado", nunca como
+    /// `clean`.
+    pub fn verdict_counts_for_jobs(
+        &self,
+        job_ids: &[ScanJobId],
+    ) -> StorageResult<HashMap<ScanJobId, VerdictCounts>> {
+        if job_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.conn.lock().expect("mutex do banco envenenado");
+        let placeholders = job_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let sql = format!(
+            "SELECT scan_job_id, verdict FROM scan_results WHERE scan_job_id IN ({placeholders})"
+        );
+        let id_strings: Vec<String> = job_ids.iter().map(|id| id.to_string()).collect();
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(id_strings.iter()), |row| {
+            let job_id: String = row.get(0)?;
+            let verdict: String = row.get(1)?;
+            Ok((job_id, verdict))
+        })?;
+
+        let mut counts: HashMap<ScanJobId, VerdictCounts> = HashMap::new();
+        for row in rows {
+            let (job_id_str, verdict_str) = row?;
+            let job_id = ScanJobId::from_uuid(
+                uuid::Uuid::parse_str(&job_id_str).map_err(sqlite_decode_err)?,
+            );
+            let verdict = verdict_from_str(&verdict_str).map_err(sqlite_decode_err)?;
+            counts.entry(job_id).or_default().add(verdict);
+        }
+        Ok(counts)
+    }
+
     pub fn list_results_for_job(&self, job_id: ScanJobId) -> StorageResult<Vec<ScanResult>> {
         let conn = self.conn.lock().expect("mutex do banco envenenado");
         let mut stmt = conn.prepare(
@@ -243,6 +333,34 @@ impl Database {
         }
 
         Ok(results)
+    }
+
+    /// Busca um único resultado (com suas detecções) pelo seu id — usado,
+    /// por exemplo, para localizar o arquivo de origem antes de colocá-lo
+    /// em quarentena.
+    pub fn get_scan_result(&self, id: ScanResultId) -> StorageResult<Option<ScanResult>> {
+        let conn = self.conn.lock().expect("mutex do banco envenenado");
+        let mut result = conn
+            .query_row(
+                "SELECT id, scan_job_id, file_path, file_hash, engines_used, verdict,
+                        duration_ms, examined_at, error_message
+                 FROM scan_results WHERE id = ?1",
+                params![id.to_string()],
+                Self::row_to_scan_result,
+            )
+            .optional()?;
+
+        if let Some(result) = result.as_mut() {
+            let mut dstmt = conn.prepare(
+                "SELECT id, scan_result_id, engine_name, engine_version, signature_id, metadata
+                 FROM detections WHERE scan_result_id = ?1",
+            )?;
+            result.detections = dstmt
+                .query_map(params![result.id.to_string()], Self::row_to_detection)?
+                .collect::<Result<Vec<_>, _>>()?;
+        }
+
+        Ok(result)
     }
 
     fn row_to_scan_result(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScanResult> {
@@ -415,6 +533,115 @@ impl Database {
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
+
+    // ---------------------------------------------------------------
+    // quarantine_items
+    // ---------------------------------------------------------------
+
+    pub fn insert_quarantine_item(&self, item: &QuarantineItem) -> StorageResult<()> {
+        let conn = self.conn.lock().expect("mutex do banco envenenado");
+        conn.execute(
+            "INSERT INTO quarantine_items (
+                id, scan_result_id, original_path, internal_name, state, reason,
+                file_hash_before, file_hash_after, quarantined_at, restored_at, last_error
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                item.id.to_string(),
+                item.scan_result_id.map(|id| id.to_string()),
+                item.original_path,
+                item.internal_name,
+                quarantine_state_to_str(item.state),
+                item.reason,
+                item.file_hash_before,
+                item.file_hash_after,
+                to_rfc3339(item.quarantined_at)?,
+                item.restored_at.map(to_rfc3339).transpose()?,
+                item.last_error,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Atualiza os campos que mudam após a quarentena inicial (estado,
+    /// hash pós-restauração, data de restauração e o último erro real).
+    /// Falha se o item não existir, pelo mesmo motivo de `update_scan_job`:
+    /// nunca mascarar uma dessincronização como sucesso silencioso.
+    pub fn update_quarantine_item(&self, item: &QuarantineItem) -> StorageResult<()> {
+        let conn = self.conn.lock().expect("mutex do banco envenenado");
+        let affected = conn.execute(
+            "UPDATE quarantine_items SET
+                state = ?2, file_hash_after = ?3, restored_at = ?4, last_error = ?5
+             WHERE id = ?1",
+            params![
+                item.id.to_string(),
+                quarantine_state_to_str(item.state),
+                item.file_hash_after,
+                item.restored_at.map(to_rfc3339).transpose()?,
+                item.last_error,
+            ],
+        )?;
+        if affected == 0 {
+            return Err(StorageError::NotFound(format!("quarantine_item {}", item.id)));
+        }
+        Ok(())
+    }
+
+    pub fn get_quarantine_item(&self, id: QuarantineItemId) -> StorageResult<Option<QuarantineItem>> {
+        let conn = self.conn.lock().expect("mutex do banco envenenado");
+        conn.query_row(
+            "SELECT id, scan_result_id, original_path, internal_name, state, reason,
+                    file_hash_before, file_hash_after, quarantined_at, restored_at, last_error
+             FROM quarantine_items WHERE id = ?1",
+            params![id.to_string()],
+            Self::row_to_quarantine_item,
+        )
+        .optional()
+        .map_err(StorageError::from)
+    }
+
+    /// Lista os itens em quarentena, mais recentes primeiro. Sem paginação
+    /// nesta versão — volume esperado baixo (isolamento é uma ação manual
+    /// por arquivo, nunca em massa).
+    pub fn list_quarantine_items(&self) -> StorageResult<Vec<QuarantineItem>> {
+        let conn = self.conn.lock().expect("mutex do banco envenenado");
+        let mut stmt = conn.prepare(
+            "SELECT id, scan_result_id, original_path, internal_name, state, reason,
+                    file_hash_before, file_hash_after, quarantined_at, restored_at, last_error
+             FROM quarantine_items ORDER BY quarantined_at DESC",
+        )?;
+        let rows = stmt
+            .query_map([], Self::row_to_quarantine_item)?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    fn row_to_quarantine_item(row: &rusqlite::Row<'_>) -> rusqlite::Result<QuarantineItem> {
+        let id: String = row.get(0)?;
+        let scan_result_id: Option<String> = row.get(1)?;
+        let state: String = row.get(4)?;
+        let quarantined_at: String = row.get(8)?;
+        let restored_at: Option<String> = row.get(9)?;
+
+        Ok(QuarantineItem {
+            id: QuarantineItemId::from_uuid(uuid::Uuid::parse_str(&id).map_err(sqlite_decode_err)?),
+            scan_result_id: scan_result_id
+                .map(|s| uuid::Uuid::parse_str(&s).map(ScanResultId::from_uuid))
+                .transpose()
+                .map_err(sqlite_decode_err)?,
+            original_path: row.get(2)?,
+            internal_name: row.get(3)?,
+            state: quarantine_state_from_str(&state).map_err(sqlite_decode_err)?,
+            reason: row.get(5)?,
+            file_hash_before: row.get(6)?,
+            file_hash_after: row.get(7)?,
+            quarantined_at: parse_rfc3339(&quarantined_at).map_err(sqlite_decode_err)?,
+            restored_at: restored_at
+                .map(|s| parse_rfc3339(&s))
+                .transpose()
+                .map_err(sqlite_decode_err)?,
+            last_error: row.get(10)?,
+        })
+    }
 }
 
 /// Converte um erro de decodificação (UUID, enum, timestamp, JSON) em um
@@ -523,6 +750,65 @@ mod tests {
         assert_eq!(db.get_setting("tema").unwrap(), None);
         db.set_setting("tema", "dark").unwrap();
         assert_eq!(db.get_setting("tema").unwrap(), Some("dark".to_string()));
+    }
+
+    #[test]
+    fn quarantine_item_roundtrips_and_updates() {
+        use corvus_core::QuarantineState;
+
+        let db = Database::open_in_memory().unwrap();
+        let item = QuarantineItem {
+            id: QuarantineItemId::new(),
+            scan_result_id: None,
+            original_path: "C:/Users/alguem/Downloads/eicar.com".into(),
+            internal_name: "a1b2c3d4.bin".into(),
+            state: QuarantineState::Quarantined,
+            reason: "Ameaça encontrada: Eicar-Test-Signature".into(),
+            file_hash_before: Some("44d88612fea8a8f36de82e1278abb02f".into()),
+            file_hash_after: Some("44d88612fea8a8f36de82e1278abb02f".into()),
+            quarantined_at: OffsetDateTime::now_utc(),
+            restored_at: None,
+            last_error: None,
+        };
+        db.insert_quarantine_item(&item).unwrap();
+
+        let fetched = db.get_quarantine_item(item.id).unwrap().expect("item deveria existir");
+        assert_eq!(fetched.state, QuarantineState::Quarantined);
+        assert_eq!(fetched.original_path, item.original_path);
+
+        let mut restored = fetched;
+        restored.state = QuarantineState::Restored;
+        restored.restored_at = Some(OffsetDateTime::now_utc());
+        db.update_quarantine_item(&restored).unwrap();
+
+        let after_restore = db.get_quarantine_item(item.id).unwrap().unwrap();
+        assert_eq!(after_restore.state, QuarantineState::Restored);
+        assert!(after_restore.restored_at.is_some());
+
+        let all = db.list_quarantine_items().unwrap();
+        assert_eq!(all.len(), 1);
+    }
+
+    #[test]
+    fn update_nonexistent_quarantine_item_fails_instead_of_silently_succeeding() {
+        use corvus_core::QuarantineState;
+
+        let db = Database::open_in_memory().unwrap();
+        let item = QuarantineItem {
+            id: QuarantineItemId::new(),
+            scan_result_id: None,
+            original_path: "C:/x".into(),
+            internal_name: "x.bin".into(),
+            state: QuarantineState::Quarantined,
+            reason: "teste".into(),
+            file_hash_before: None,
+            file_hash_after: None,
+            quarantined_at: OffsetDateTime::now_utc(),
+            restored_at: None,
+            last_error: None,
+        };
+        let err = db.update_quarantine_item(&item).unwrap_err();
+        assert!(matches!(err, StorageError::NotFound(_)));
     }
 
     #[test]

@@ -26,6 +26,24 @@ export function formatDurationMs(ms: number): string {
   return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
 }
 
+/** Velocidade média de uma verificação já concluída ("X arq/s"), calculada
+ * só a partir de dados reais (arquivos examinados e tempo decorrido entre
+ * início e fim). Retorna "—" quando não há dados suficientes — nunca
+ * extrapola um valor que o backend não informou. */
+export function formatSpeedBetween(
+  filesScanned: number,
+  startIso: string | null,
+  endIso: string | null,
+): string {
+  if (!startIso || !endIso || filesScanned <= 0) return '—'
+  const start = new Date(startIso).getTime()
+  const end = new Date(endIso).getTime()
+  const elapsedMs = end - start
+  if (Number.isNaN(start) || Number.isNaN(end) || elapsedMs < 1000) return '—'
+  const perSecond = filesScanned / (elapsedMs / 1000)
+  return perSecond >= 10 ? `${Math.round(perSecond)} arq/s` : `${perSecond.toFixed(1)} arq/s`
+}
+
 /** Encurta um caminho de arquivo longo para exibição, preservando o nome
  * do arquivo (com uma reticência indicando que o início foi omitido). */
 export function truncatePath(path: string, maxLength = 64): string {

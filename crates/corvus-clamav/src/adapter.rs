@@ -76,6 +76,26 @@ pub fn parse_clamscan_line(line: &str) -> Option<RawScanEntry> {
     None
 }
 
+/// Escapa um caminho literal para uso seguro como padrão de
+/// `--exclude-dir`/`--exclude` do clamscan (expressão regular POSIX
+/// estendida). Sem isso, caminhos do Windows (que usam `\` e podem conter
+/// outros metacaracteres de regex) seriam interpretados incorretamente —
+/// por exemplo, um `\` solto escaparia o caractere seguinte, e um `.`
+/// casaria com qualquer caractere em vez de um ponto literal.
+pub(crate) fn escape_regex_literal(path: &str) -> String {
+    let mut escaped = String::with_capacity(path.len() * 2);
+    for ch in path.chars() {
+        if matches!(
+            ch,
+            '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '|'
+        ) {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+    escaped
+}
+
 /// Adaptador fino sobre o executável `clamscan`.
 pub struct ClamAvAdapter {
     executable: PathBuf,
@@ -102,19 +122,34 @@ impl ClamAvAdapter {
         probe_health(Some(&self.executable))
     }
 
-    /// Executa uma verificação recursiva sobre os caminhos informados.
+    /// Executa uma verificação sobre os caminhos informados.
     ///
-    /// - `cancel`: canal de cancelamento cooperativo; `true` solicita o
-    ///   encerramento imediato (e seguro) do processo `clamscan`.
-    /// - `timeout`: limite superior de duração total da verificação.
-    /// - `on_entry`: chamado para cada arquivo processado, permitindo à
-    ///   camada de orquestração atualizar progresso em tempo real.
+    /// Antes de invocar o \`clamscan\`, percorre os diretórios ele mesmo
+    /// (ver \`crate::filelist::enumerate_files\`) para montar a lista real de
+    /// arquivos a examinar — pulando arquivos "só na nuvem" (OneDrive e
+    /// provedores similares de Arquivos sob Demanda) em vez de deixar o
+    /// \`clamscan\` forçar o download completo deles só para poder ler o
+    /// conteúdo, o que pode travar uma verificação inteira por minutos num
+    /// único arquivo grande ainda não baixado. A lista resultante é passada
+    /// ao \`clamscan\` via \`--file-list\` (em vez de \`--recursive\` sobre as
+    /// pastas), já que o \`clamscan\` não tem como saber sozinho quais
+    /// arquivos pular por esse motivo.
     ///
-    /// Nunca trata um arquivo com erro/indeterminado como limpo: cada linha
-    /// de saída é propagada com o veredito bruto exatamente como relatado.
+    /// - \`cancel\`: canal de cancelamento cooperativo; \`true\` solicita o
+    ///   encerramento imediato (e seguro) do processo \`clamscan\`.
+    /// - \`timeout\`: limite superior de duração total da verificação (não
+    ///   inclui o tempo da enumeração de arquivos, que só faz chamadas de
+    ///   metadado e é rápida mesmo em pastas grandes).
+    /// - \`on_entry\`: chamado para cada arquivo processado (inclusive os
+    ///   pulados por estarem só na nuvem), permitindo à camada de
+    ///   orquestração atualizar progresso em tempo real.
+    ///
+    /// Nunca trata um arquivo com erro/indeterminado/pulado como limpo: cada
+    /// entrada é propagada com o veredito bruto exatamente como apurado.
     pub async fn run_scan(
         &self,
         targets: &[PathBuf],
+        exclude_dirs: &[String],
         mut cancel: watch::Receiver<bool>,
         timeout: Duration,
         mut on_entry: impl FnMut(&RawScanEntry) + Send,
@@ -123,21 +158,67 @@ impl ClamAvAdapter {
             return Ok(Vec::new());
         }
 
-        let mut child = Command::new(&self.executable)
-            .arg("--recursive")
+        let owned_targets = targets.to_vec();
+        let owned_excludes = exclude_dirs.to_vec();
+        let (files, skipped) = tokio::task::spawn_blocking(move || {
+            crate::filelist::enumerate_files(&owned_targets, &owned_excludes)
+        })
+        .await
+        .map_err(|join_error| {
+            ClamAvError::Unavailable(format!(
+                "falha interna ao enumerar arquivos a verificar: {join_error}"
+            ))
+        })?;
+
+        let mut skipped_entries = Vec::with_capacity(skipped.len());
+        for item in skipped {
+            let entry = RawScanEntry {
+                path: item.path.display().to_string(),
+                verdict: RawVerdict::Error {
+                    message: "arquivo não está baixado localmente (OneDrive ou outro \
+                              provedor de nuvem com Arquivos sob Demanda); verificação \
+                              pulada para não forçar o download completo do arquivo"
+                        .to_string(),
+                },
+            };
+            on_entry(&entry);
+            skipped_entries.push(entry);
+        }
+
+        if files.is_empty() {
+            return Ok(skipped_entries);
+        }
+
+        let file_list_path = std::env::temp_dir()
+            .join(format!("corvusav-clamscan-filelist-{}.txt", uuid::Uuid::new_v4()));
+        let file_list_content: String =
+            files.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\n");
+        if let Err(e) = tokio::fs::write(&file_list_path, file_list_content).await {
+            return Err(ClamAvError::Io(e));
+        }
+
+        let mut child = match Command::new(&self.executable)
+            .arg(format!("--file-list={}", file_list_path.display()))
             .arg("--verbose")
             .arg("--no-summary")
-            .args(targets)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
-            .spawn()?;
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(e) => {
+                let _ = tokio::fs::remove_file(&file_list_path).await;
+                return Err(ClamAvError::Io(e));
+            }
+        };
 
         let stdout = child.stdout.take().expect("stdout configurado como piped");
         let mut lines = BufReader::new(stdout).lines();
 
         let mut entries = Vec::new();
+        let mut scan_error = None;
         let deadline = tokio::time::sleep(timeout);
         tokio::pin!(deadline);
 
@@ -149,43 +230,59 @@ impl ClamAvAdapter {
                     // Sender descartado é tratado como "não cancelar": o
                     // valor mais recente do canal continua sendo honrado.
                     if changed.is_ok() && *cancel.borrow() {
-                        let _ = child.start_kill();
-                        let _ = child.wait().await;
-                        return Err(ClamAvError::Cancelled);
+                        scan_error = Some(ClamAvError::Cancelled);
+                        break;
                     }
                 }
 
                 _ = &mut deadline => {
-                    let _ = child.start_kill();
-                    let _ = child.wait().await;
-                    return Err(ClamAvError::TimedOut);
+                    scan_error = Some(ClamAvError::TimedOut);
+                    break;
                 }
 
                 line = lines.next_line() => {
-                    match line? {
-                        Some(raw_line) => {
+                    match line {
+                        Ok(Some(raw_line)) => {
                             if let Some(entry) = parse_clamscan_line(&raw_line) {
                                 on_entry(&entry);
                                 entries.push(entry);
                             }
                         }
-                        None => break,
+                        Ok(None) => break,
+                        Err(e) => {
+                            scan_error = Some(ClamAvError::Io(e));
+                            break;
+                        }
                     }
                 }
             }
         }
 
-        let status = child.wait().await?;
+        if scan_error.is_some() {
+            let _ = child.start_kill();
+        }
+        let wait_result = child.wait().await;
+        let _ = tokio::fs::remove_file(&file_list_path).await;
+
+        if let Some(error) = scan_error {
+            return Err(error);
+        }
+
+        let status = wait_result?;
         // Códigos de saída do clamscan: 0 = nenhuma ameaça; 1 = ameaça(s)
         // encontrada(s) (ambos são execuções bem-sucedidas); 2 = erro de
         // execução. Um código 2 sem nenhuma entrada processada indica falha
-        // real (ex.: argumento inválido, base de assinaturas ausente).
+        // real (ex.: argumento inválido, base de assinaturas ausente) — a
+        // checagem usa só \`entries\` (vindas do próprio clamscan), nunca
+        // \`skipped_entries\`, para não mascarar essa falha real quando havia
+        // arquivos na nuvem pulados.
         if status.code() == Some(2) && entries.is_empty() {
             return Err(ClamAvError::Unavailable(
                 "clamscan encerrou com código de erro (2) sem processar nenhum arquivo".into(),
             ));
         }
 
+        entries.extend(skipped_entries);
         Ok(entries)
     }
 }
@@ -232,9 +329,21 @@ mod tests {
         let adapter = ClamAvAdapter::new(PathBuf::from("clamscan-inexistente"));
         let (_tx, rx) = watch::channel(false);
         let result = adapter
-            .run_scan(&[], rx, Duration::from_secs(1), |_| {})
+            .run_scan(&[], &[], rx, Duration::from_secs(1), |_| {})
             .await
             .unwrap();
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn escapes_windows_path_for_literal_regex_match() {
+        let escaped = escape_regex_literal(r"C:\Users\alguem\node_modules");
+        assert_eq!(escaped, r"C:\\Users\\alguem\\node_modules");
+    }
+
+    #[test]
+    fn escapes_regex_metacharacters_in_path() {
+        let escaped = escape_regex_literal("C:/dados (backup)/a.b+c");
+        assert_eq!(escaped, r"C:/dados \(backup\)/a\.b\+c");
     }
 }

@@ -6,6 +6,7 @@ members = [
     "crates/corvus-storage",
     "crates/corvus-clamav",
     "crates/corvus-scanner",
+    "crates/corvus-quarantine",
     "apps/desktop/src-tauri",
 ]
 
@@ -22,17 +23,19 @@ corvus-policy = { path = "crates/corvus-policy" }
 corvus-storage = { path = "crates/corvus-storage" }
 corvus-clamav = { path = "crates/corvus-clamav" }
 corvus-scanner = { path = "crates/corvus-scanner" }
+corvus-quarantine = { path = "crates/corvus-quarantine" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
 anyhow = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "fs", "net"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+time = { version = "0.3", features = ["serde", "serde-human-readable", "formatting", "parsing"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
+sha2 = "0.10"
 
 [profile.release]
 opt-level = 3
