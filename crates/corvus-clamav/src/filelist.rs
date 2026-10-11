@@ -212,8 +212,10 @@ mod tests {
         std::fs::write(root.join("incluido.txt"), b"x").unwrap();
         std::fs::write(excluded.join("ignorado.txt"), b"x").unwrap();
 
-        let (files, _) =
-            enumerate_files(std::slice::from_ref(&root), &[excluded.to_string_lossy().to_string()]);
+        let (files, _) = enumerate_files(
+            std::slice::from_ref(&root),
+            &[excluded.to_string_lossy().to_string()],
+        );
 
         std::fs::remove_dir_all(&root).ok();
 
