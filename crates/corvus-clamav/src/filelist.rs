@@ -194,7 +194,7 @@ mod tests {
         std::fs::write(root.join("a.txt"), b"conteudo a").unwrap();
         std::fs::write(sub.join("b.txt"), b"conteudo b").unwrap();
 
-        let (files, skipped) = enumerate_files(&[root.clone()], &[]);
+        let (files, skipped) = enumerate_files(std::slice::from_ref(&root), &[]);
 
         std::fs::remove_dir_all(&root).ok();
 
@@ -213,7 +213,7 @@ mod tests {
         std::fs::write(excluded.join("ignorado.txt"), b"x").unwrap();
 
         let (files, _) =
-            enumerate_files(&[root.clone()], &[excluded.to_string_lossy().to_string()]);
+            enumerate_files(std::slice::from_ref(&root), &[excluded.to_string_lossy().to_string()]);
 
         std::fs::remove_dir_all(&root).ok();
 
@@ -240,7 +240,7 @@ mod tests {
         let file_path = root.join("sozinho.txt");
         std::fs::write(&file_path, b"conteudo").unwrap();
 
-        let (files, skipped) = enumerate_files(&[file_path.clone()], &[]);
+        let (files, skipped) = enumerate_files(std::slice::from_ref(&file_path), &[]);
 
         std::fs::remove_dir_all(&root).ok();
 
